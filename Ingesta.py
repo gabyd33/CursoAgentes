@@ -1,5 +1,4 @@
 import json
-import sys
 from functools import lru_cache
 from pathlib import Path
 from typing import Callable
@@ -9,10 +8,8 @@ GUIDE_DIR = ROOT_DIR / "MDN-JavaScript-Guide"
 OUTPUT_PATH = ROOT_DIR / "chunk_vectors.json"
 BATCH_SIZE = 100
 
-sys.path.insert(0, str(ROOT_DIR / "Providers"))
-
 from LLMProvider import LLMProvider
-from OpenAIProvider import OpenAIProvider
+from Providers.OpenAIProvider import OpenAIProvider
 
 
 @lru_cache(maxsize=1)

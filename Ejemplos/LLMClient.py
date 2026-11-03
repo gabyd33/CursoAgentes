@@ -1,4 +1,7 @@
-import Providers
+import random
+from typing import Any
+
+import Clases.Providers as Providers
 import os
 import time
 from dotenv import load_dotenv
@@ -19,12 +22,21 @@ from concurrent.futures import ThreadPoolExecutor
 #- Si le mostrás tu código a un compañero que usa un proveedor distinto al tuyo, tiene que poder cambiar `LLM_PROVIDER` en su `.env` y que funcione sin tocar tu código (más allá de tener las funciones `llamar_*` de los otros proveedores disponibles).
 
 class LLMClient:
-    def __init__(self):
+    def __init__(self, provider: str = None):
         load_dotenv()
+        selected_provider = provider or os.environ.get("LLM_PROVIDER", "ollama")
+        self.provider = selected_provider.strip().lower()
+        if self.provider == "ollama":
+            self.model = os.environ.get("OLLAMA_MODEL_ID", "qwen3:8b")
+        else:
+            self.model = os.environ.get("OPENAI_MODEL_ID", "gpt-5.4-mini")
 
-    def generate(self, prompt: str, system: str = None, temperature: float = 0.7, max_tokens: int = 500) -> str:
+    def generate(self, prompt: str, system: str = None, temperature: float = 0.7, max_tokens: int = 500, schema: dict[str, Any] = None, registro=0) -> str | dict[str, Any]:
         if not isinstance(max_tokens, int) or isinstance(max_tokens, bool) or max_tokens < 1:
             raise ValueError("max_tokens debe ser un entero mayor que 0.")
+
+        if not hasattr(self, "provider") or not self.provider:
+            self.provider = os.environ.get("LLM_PROVIDER", "ollama").strip().lower()
 
         if self.provider not in {"ollama", "bedrock", "anthropic", "openai", "google"}:
             raise ValueError(f"Proveedor no reconocido: {self.provider!r}.")
@@ -33,19 +45,20 @@ class LLMClient:
         for intento in range(max_reintentos):
             try:
                 if self.provider == "ollama":
-                    return Providers.llamar_ollama(prompt, system=system, temperature=temperature, max_tokens=max_tokens)
+                    return Providers.llamar_ollama(prompt, system=system, temperature=temperature, max_tokens=max_tokens, schema=schema)
                 if self.provider == "bedrock":
                     return Providers.llamar_bedrock(prompt, system=system, temperature=temperature, max_tokens=max_tokens)
                 if self.provider == "anthropic":
                     return Providers.llamar_anthropic(prompt, system=system, temperature=temperature, max_tokens=max_tokens)
                 if self.provider == "openai":
-                    return Providers.llamar_openai(prompt, system=system, temperature=temperature, max_tokens=max_tokens)
+                    return Providers.llamar_openai(prompt, system=system, temperature=temperature, max_tokens=max_tokens, registro=registro)
                 if self.provider == "google":
                     return Providers.llamar_google(prompt, system=system, temperature=temperature, max_tokens=max_tokens)
                 
             except Exception as e:
                 if intento < max_reintentos - 1:
-                    espera = 2 ** intento  # 1s, 2s, 4s...             
+                    #espera = 2 ** intento  # 1s, 2s, 4s...     
+                    espera = (2 ** intento) + random.uniform(0, 1)  # backoff exponencial + jitter        
                     print(
                         f"Error de {self.provider} "
                         f"({getattr(e, 'status_code', 'sin código HTTP')}): {e}; "
@@ -56,22 +69,41 @@ class LLMClient:
                     continue
                 else:
                     raise RuntimeError(f"Error al generar el texto con el proveedor {self.provider}: {e}") from e
-   
+    def generate_stream(
+        self,
+        prompt: str,
+        system: str = None,
+        temperature: float = 0.7,
+        max_tokens: int = 500,
+    ) -> Any:
+        if self.provider != "openai":
+            raise ValueError("El streaming está disponible actualmente con LLM_PROVIDER=openai.")
+        if not isinstance(max_tokens, int) or isinstance(max_tokens, bool) or max_tokens < 1:
+            raise ValueError("max_tokens debe ser un entero mayor que 0.")
+
+        return Providers.llamar_openai_stream(
+            prompt=prompt,
+            system=system,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+
 
 
 # Prueba rápida
-client = LLMClient()
+#client = LLMClient()
 
-client.model = os.environ.get("OLLAMA_MODEL", "qwen3:8b")
-client.provider = os.environ.get("LLM_PROVIDER", "ollama")
+#client.model = os.environ.get("OLLAMA_MODEL", "qwen3:8b")
+#client.provider = os.environ.get("LLM_PROVIDER", "ollama")
 
-try:
-    respuesta = client.generate(
-        "¿Cuál es la capital de Francia?", "Respondé en español, en un máximo de 3 oraciones, "
-            "en tono directo y sin relleno. Utilizá bullets para enumerar las oraciones o los puntos clave." 
-            "Ejemplo:\n- Primer punto\n- Segundo punto\n- Tercer punto""",0.9,900
-    )
+#try:
+#    respuesta = client.generate(
+#        "¿Cuál es la capital de Francia?", "Respondé en español, en un máximo de 3 oraciones, "
+#            "en tono directo y sin relleno. Utilizá bullets para enumerar las oraciones o los puntos clave." 
+#            "Ejemplo:\n- Primer punto\n- Segundo punto\n- Tercer punto""",0.9,900
+#    )
 
-    print(respuesta)
-except (ValueError, RuntimeError) as err:
-    print(f"No se pudo generar la respuesta: {err}")
+#    print(respuesta)
+#except (ValueError, RuntimeError) as err:
+#    print(f"No se pudo generar la respuesta: {err}")

@@ -1,0 +1,43 @@
+import json
+import os
+import sys
+from pydantic import BaseModel, ConfigDict, Field
+from typing import Literal
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "Providers"))
+
+from importlib import import_module
+
+OpenAIProvider = import_module("OpenAIProvider").OpenAIProvider
+provider = OpenAIProvider()
+
+
+
+class ClasificacionPreguntaDocumentacion(BaseModel):
+    tipo_pregunta: Literal["conceptual","procedimiento","configuracion","error","fuera_de_alcance"]
+    requiere_busqueda_en_documentacion: bool
+    resumen: str = Field(..., max_length=200, description="Resumen breve de la pregunta, en una oración") 
+    model_config = ConfigDict(extra="forbid")  # Rechaza campos que no estén definidos en esta clase.
+
+
+#Escribí una función clasificar(texto: str) -> TuModelo que use get_provider().generate_structured(...) para resolverlo.
+def clasificar(texto: str) -> ClasificacionPreguntaDocumentacion:
+    return provider.generate_structured(
+        prompt=texto,
+        schema_model=ClasificacionPreguntaDocumentacion
+    )
+
+#response2 = client2.generate(
+#    prompt="Listá 5 buenas prácticas de seguridad para agentes de IA, con una oración de explicación cada una.",
+#    registro=1,
+#    temperature=1
+#)
+
+#print(clasificar("Listá 2 buenas prácticas de seguridad para agentes de IA, con una oración de explicación cada una."))
+print(clasificar("Dame 2 buenas prácticas de seguridad para agentes de IA. con este formato: severidad, descripción"))
+print(clasificar("las aves."))
+
+#print(response2)
+
+
